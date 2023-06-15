@@ -35,7 +35,8 @@ class FM(Injector):
 
         self._decimate = Decimate(self._input_size, self._output_size,
                                   cuda=self._cuda)
-
+        self.fast = True;
+                     
         super().__init__(cuda)
 
     @property
@@ -58,11 +59,18 @@ class FM(Injector):
             raise ValueError("input_sig size and input_size mismatch")
 
         _tmp = self._xp.asarray(input_sig)
-        _tmp = self._xp.angle(_tmp)
-        _tmp = self._xp.unwrap(_tmp)
-        _tmp = self._xp.diff(_tmp)
-        _tmp = self._xp.pad(_tmp, (1, 0))
-        _tmp = _tmp / self._xp.pi
+        if(self.fast):
+            # Accelerated FM demod (No atan2) based on https://flylib.com/books/en/2.729.1/frequency_demodulation_algorithms.html
+            _tmp[:-2] = (_tmp[:-2] - _tmp[2:]) * self._xp.conj(_tmp[1:-1])
+            _tmp = - (_tmp.real - _tmp.imag) / 2
+        else:
+            # Default FM demod
+            _tmp = self._xp.angle(_tmp)
+            _tmp = self._xp.unwrap(_tmp)
+            _tmp = self._xp.diff(_tmp)
+            _tmp = self._xp.pad(_tmp, (1, 0))
+            _tmp = _tmp / self._xp.pi
+
         _tmp = self._decimate.run(_tmp)
         _tmp = self._xp.expand_dims(_tmp, axis=1)
 
